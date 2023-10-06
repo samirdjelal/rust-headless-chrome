@@ -554,6 +554,26 @@ impl Tab {
         Ok(self)
     }
 
+    pub fn navigate_to_using_referrer(&self, url: &str, referrer: &str) -> Result<&Self> {
+        let return_object = self.call_method(Navigate {
+            url: url.to_string(),
+            referrer: Some(referrer.to_string()),
+            transition_Type: None,
+            frame_id: None,
+            referrer_policy: None,
+        })?;
+        if let Some(error_text) = return_object.error_text {
+            return Err(NavigationFailed { error_text }.into());
+        }
+
+        let navigating = Arc::clone(&self.navigating);
+        navigating.store(true, Ordering::SeqCst);
+
+        info!("Navigating a tab to {}", url);
+
+        Ok(self)
+    }
+
     /// Set default timeout for the tab
     ///
     /// This will be applied to all [wait_for_element](Tab::wait_for_element) and [wait_for_elements](Tab::wait_for_elements) calls for this tab
