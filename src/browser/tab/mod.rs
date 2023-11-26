@@ -57,7 +57,6 @@ use crate::types::{Bounds, CurrentBounds, PrintToPdfOptions, RemoteError};
 use super::transport::SessionId;
 use crate::browser::transport::Transport;
 use std::thread::sleep;
-use crate::types::Message::Event;
 
 pub mod element;
 mod keys;
