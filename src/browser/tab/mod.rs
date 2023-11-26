@@ -57,6 +57,7 @@ use crate::types::{Bounds, CurrentBounds, PrintToPdfOptions, RemoteError};
 use super::transport::SessionId;
 use crate::browser::transport::Transport;
 use std::thread::sleep;
+use crate::types::Message::Event;
 
 pub mod element;
 mod keys;
@@ -936,7 +937,7 @@ impl Tab {
             code: code.clone(),
             windows_virtual_key_code: Some(definiton.key_code),
             native_virtual_key_code: Some(definiton.key_code),
-            modifiers: modifiers.clone(),
+            modifiers,
             timestamp: None,
             unmodified_text: None,
             key_identifier: None,
@@ -1482,6 +1483,7 @@ impl Tab {
     /// #
     /// # use headless_chrome::Browser;
     /// # use headless_chrome::protocol::Event;
+    /// use headless_chrome::types::Message::Event;
     /// # let browser = Browser::default()?;
     /// # let tab = browser.new_tab()?;
     /// tab.enable_log()?;

@@ -10,6 +10,8 @@ use std::{
 #[cfg(test)]
 use std::cell::RefCell;
 
+use derive_builder::Builder;
+
 use anyhow::{anyhow, Result};
 use log::*;
 use rand::seq::SliceRandom;
@@ -50,6 +52,8 @@ enum ChromeLaunchError {
     NoAvailablePorts,
     #[error("The chosen debugging port is already in use")]
     DebugPortInUse,
+    #[error("You need to set the sandbox(false) option when running as root")]
+    RunningAsRootWithoutNoSandbox,
 }
 
 #[cfg(windows)]
@@ -66,7 +70,7 @@ struct TemporaryProcess(Child, Option<tempfile::TempDir>);
 impl Drop for TemporaryProcess {
     fn drop(&mut self) {
         info!("Killing Chrome. PID: {}", self.0.id());
-        self.0.kill().and_then(|_| self.0.wait()).ok();
+        self.0.kill().and_then(|()| self.0.wait()).ok();
         if let Some(dir) = self.1.take() {
             if let Err(e) = dir.close() {
                 warn!("Failed to close temporary directory: {}", e);
@@ -77,7 +81,7 @@ impl Drop for TemporaryProcess {
 
 /// Represents the way in which Chrome is run. By default it will search for a Chrome
 /// binary on the system, use an available port for debugging, and start in headless mode.
-#[derive(Debug, Builder)]
+#[derive(Clone, Debug, Builder)]
 pub struct LaunchOptions<'a> {
     /// Determines whether to run headless version of the browser. Defaults to true.
     #[builder(default = "true")]
@@ -228,7 +232,7 @@ impl Process {
         if launch_options.path.is_none() {
             #[cfg(feature = "fetch")]
             {
-                let fetch = Fetcher::new(launch_options.fetcher_options.clone())?;
+                let fetch = Fetcher::new(launch_options.fetcher_options.clone());
                 launch_options.path = Some(fetch.fetch()?);
             }
             #[cfg(not(feature = "fetch"))]
@@ -417,6 +421,7 @@ impl Process {
         R: Read,
     {
         let port_taken_re = Regex::new(r"ERROR.*bind\(\)")?;
+        let root_sandbox = "Running as root without --no-sandbox is not supported";
 
         let re = Regex::new(r"listening on (.*/devtools/browser/.*)$")?;
 
@@ -429,6 +434,10 @@ impl Process {
         for line in reader.lines() {
             let chrome_output = line?;
             trace!("Chrome output: {}", chrome_output);
+
+            if chrome_output.contains(root_sandbox) {
+                return Err(ChromeLaunchError::RunningAsRootWithoutNoSandbox {}.into());
+            }
 
             if port_taken_re.is_match(&chrome_output) {
                 return Err(ChromeLaunchError::DebugPortInUse {}.into());
@@ -529,7 +538,7 @@ mod tests {
         // if we do this after it fails on windows because chrome can stay running
         // for a bit.
         let mut installed_dir = tests_temp_dir.clone();
-        installed_dir.push(format!("{}-{}", PLATFORM, CUR_REV));
+        installed_dir.push(format!("{PLATFORM}-{CUR_REV}"));
 
         if installed_dir.exists() {
             info!("Deleting pre-existing install at {:?}", &installed_dir);
